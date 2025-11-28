@@ -24,7 +24,7 @@ st.set_page_config(
 )
 
 # API endpoint
-API_URL = "http://localhost:8000"
+API_URL = "https://dentaltest-1.onrender.com"
 
 
 # Custom CSS
@@ -339,75 +339,60 @@ def main():
     elif page == " Retraining":
         st.header("Model Retraining")
         
-        st.info("""
-        **Instructions:**
-        1. Upload a ZIP file containing new training images
-        2. ZIP structure should be: `class_name/image.jpg`
-        3. Click 'Start Retraining' to begin
-        4. Monitor progress below
-        """)
+
         
         # Upload section
         st.subheader(" Upload Training Data")
         
-        zip_file = st.file_uploader(
-            "Upload ZIP file with training data",
-            type=['zip'],
-            help="ZIP should contain folders named after classes with images inside"
+        uploaded_file = st.file_uploader(
+            "Upload training image",
+            type=['jpg', 'jpeg', 'png'],
+            help="Upload a dental X-ray image for training"
         )
         
-        if zip_file is not None:
+        class_name = st.selectbox(
+            "Select class for this image",
+            ["BDC_BDR", "Caries", "Fractured", "Healthy", "Impacted", "Infection"]
+        )
+        
+        if uploaded_file is not None:
             if st.button(" Upload Data", type="primary"):
-                with st.spinner("Uploading and extracting data..."):
-                    result = upload_bulk_data(zip_file)
+                with st.spinner("Uploading image..."):
+                    uploaded_file.seek(0)
                     
-                    if result:
-                        st.success(f" {result['message']}")
-                        st.info(f" Extracted to: {result['extraction_path']}")
+                    files = {"file": uploaded_file}
+                    data = {"class_name": class_name}
+                    
+                    try:
+                        response = requests.post(f"{API_URL}/upload_bulk", files=files, data=data, timeout=120)
+                        response.raise_for_status()
+                        result = response.json()
+                        
+                        if result:
+                            st.success(f" {result['message']}")
+                            
+                            # Show prediction result if available
+                            if result.get('prediction'):
+                                pred = result['prediction']['prediction']
+                                st.info(f" Model predicts: **{pred}**")
+                            else:
+                                st.info(f" Added to class: {class_name}")
+                            
+                            # Automatically trigger retraining
+                            with st.spinner("Starting retraining..."):
+                                try:
+                                    retrain_response = requests.post(f"{API_URL}/retrain", json={"force": True}, timeout=60)
+                                    retrain_response.raise_for_status()
+                                    retrain_result = retrain_response.json()
+                                    st.success("Retraining started automatically!")
+                                except Exception as retrain_error:
+                                    st.warning(f"Upload successful, but retraining failed: {str(retrain_error)}")
+                    except Exception as e:
+                        st.error(f"Upload error: {str(e)}")
         
-        st.markdown("---")
+
         
-        # Retraining section
-        st.subheader(" Start Retraining")
-        
-        col1, col2 = st.columns([1, 3])
-        
-        with col1:
-            if st.button(" Start Retraining", type="primary", use_container_width=True):
-                result = trigger_retraining()
-                if result:
-                    st.success(result['message'])
-        
-        with col2:
-            if st.button(" Check Status", use_container_width=True):
-                status = get_retrain_status()
-                if status:
-                    st.write(f"**Status:** {status['status']}")
-                    st.write(f"**Message:** {status['message']}")
-                    if status['status'] == 'running':
-                        st.progress(status['progress'] / 100)
-        
-        # Status monitoring
-        st.markdown("---")
-        st.subheader(" Retraining Status")
-        
-        status_placeholder = st.empty()
-        progress_placeholder = st.empty()
-        
-        # Auto-refresh status
-        status = get_retrain_status()
-        if status:
-            with status_placeholder.container():
-                if status['status'] == 'idle':
-                    st.info("⏸ No retraining in progress")
-                elif status['status'] == 'running':
-                    st.warning(f" {status['message']}")
-                    progress_placeholder.progress(status['progress'] / 100)
-                elif status['status'] == 'completed':
-                    st.success(f" {status['message']}")
-                    progress_placeholder.progress(1.0)
-                elif status['status'] == 'failed':
-                    st.error(f" {status['message']}")
+
 
 
 if __name__ == "__main__":

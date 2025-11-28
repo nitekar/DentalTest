@@ -18,7 +18,7 @@ Production-ready end-to-end ML system for dental X-ray classification using deep
 ##  Video Demo
 **YouTube Link**: [INSERT YOUR 3-MINUTE VIDEO URL HERE]
 
-**Deployed Application URL**: [INSERT YOUR RENDER/AWS/GCP URL HERE]
+**Deployed Application URL**: https://dentaltest-1.onrender.com
 
 ### Demo Content (3 minutes):
 1. **Single Prediction** (30s): Upload one X-ray image → View prediction with confidence scores
