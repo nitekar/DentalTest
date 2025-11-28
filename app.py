@@ -313,7 +313,7 @@ def main():
             with col1:
                 # Display uploaded image
                 image = Image.open(uploaded_file)
-                st.image(image, caption="Uploaded X-Ray", use_column_width=True)
+                st.image(image, caption="Uploaded X-Ray", use_container_width=True)
             
             with col2:
                 # Predict button

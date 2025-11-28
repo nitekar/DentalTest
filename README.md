@@ -2,12 +2,13 @@
 
 ##  Overview
 Production-ready end-to-end ML system for dental caries detection using deep learning. Classifies dental X-rays into 5 categories: 
-Caries,Fractured,Healthyand Impacted teeth, Infection and BDC-BDR 
+Caries, Fractured, Healthy, Impacted, Infection, and BDC-BDR 
 **Model Performance**: 93%+ accuracy with ResNet18 pretrained architecture
 
 ##  Video Demo
 **Link**: [Add your 3-minute demo video URL here]
 - Shows: Image upload → Prediction → Bulk upload → Retraining → Locust load test
+- Demonstrates: Model uptime monitoring, data visualizations, performance metrics
 
 ##  Quick Start
 
@@ -16,21 +17,29 @@ Caries,Fractured,Healthyand Impacted teeth, Infection and BDC-BDR
 # Install dependencies
 pip install -r requirements.txt
 
-# Download dataset from Kaggle
-kaggle datasets download -d nirmalgaud/dental-opg-x-ray-dataset-updated
-unzip dental-opg-x-ray-dataset-updated.zip -d data/
+# Organize the dataset (if using provided data)
+python organize_data.py
+
+# Train initial model (optional - for testing)
+python train_model.py
 ```
 
 ### Local Development
 ```bash
-# 1. Train the model (optional - pretrained model included)
-python src/model.py
+# 1. Organize data and train model
+python organize_data.py
+python train_model.py
 
 # 2. Run FastAPI backend
 uvicorn main:app --reload --port 8000
 
 # 3. Run Streamlit UI (new terminal)
 streamlit run app.py --server.port 8501
+
+# Access the application:
+# - Streamlit UI: http://localhost:8501
+# - FastAPI: http://localhost:8000
+# - API Docs: http://localhost:8000/docs
 ```
 
 ### Docker Deployment
@@ -53,21 +62,25 @@ docker-compose up --scale api=4
 dental-radiography-pipeline/
 ├── README.md                   # This file
 ├── notebook/
-│   └── dental_analysis.ipynb   # Training + Evaluation
+│   └── DentalTest.ipynb       # Training + Evaluation
 ├── src/
 │   ├── preprocessing.py        # CLAHE + Augmentation
 │   ├── model.py               # ResNet18 Training
 │   └── prediction.py          # Inference Engine
 ├── data/
-│   ├── train/                 # Training images
-│   ├── test/                  # Test images
-│   └── new/                   # Bulk uploaded images
+│   ├── train/                 # Training images (organized by class)
+│   ├── test/                  # Test images (organized by class)
+│   ├── new/                   # Bulk uploaded images
+│   └── Dental OPG (Classification)/ # Original dataset
 ├── models/
 │   └── dental_model.pth       # Trained model weights
 ├── main.py                    # FastAPI endpoints
 ├── app.py                     # Streamlit UI
+├── organize_data.py           # Data organization script
+├── train_model.py             # Quick training script
 ├── Dockerfile                 # Container config
 ├── docker-compose.yml         # Multi-service orchestration
+├── nginx.conf                 # Load balancer config
 ├── locustfile.py             # Load testing
 └── requirements.txt          # Dependencies
 ```
@@ -198,14 +211,23 @@ gcloud run deploy dental-ml \
 
 ##  Troubleshooting
 
-**Model not loading**: Ensure `models/dental_model.pth` exists
+**Model not loading**: Train a model first
 ```bash
-python src/model.py  # Train from scratch
+python train_model.py  # Quick training
+# OR
+python src/model.py    # Full training
 ```
 
-**CUDA errors**: Set CPU mode in `src/model.py`
-```python
-device = torch.device('cpu')
+**Data not found**: Organize the dataset
+```bash
+python organize_data.py
 ```
+
+**CUDA errors**: The system automatically falls back to CPU
 
 **Port conflicts**: Change ports in `docker-compose.yml`
+
+**Unicode errors on Windows**: Use UTF-8 encoding
+```bash
+set PYTHONIOENCODING=utf-8
+```
