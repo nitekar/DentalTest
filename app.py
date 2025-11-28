@@ -271,22 +271,9 @@ def main():
                         
                         if result:
                             # Display prediction
-                            st.markdown('<div class="prediction-box">', unsafe_allow_html=True)
-                            
                             prediction = result['prediction']
-                            confidence = result['confidence']
-                            
-                            # Confidence color coding
-                            if confidence >= 0.8:
-                                conf_class = "confidence-high"
-                            elif confidence >= 0.6:
-                                conf_class = "confidence-medium"
-                            else:
-                                conf_class = "confidence-low"
                             
                             st.markdown(f"### Prediction: **{prediction}**")
-                            
-                            st.markdown('</div>', unsafe_allow_html=True)
                             
                             # Probability distribution
                             st.subheader("All Class Probabilities")
