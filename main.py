@@ -219,9 +219,17 @@ async def upload_bulk_data(file: UploadFile = File(...), class_name: str = "Unkn
 
 
 @app.post("/retrain")
-async def trigger_retraining(background_tasks: BackgroundTasks):
+async def trigger_retraining(
+    background_tasks: BackgroundTasks,
+    epochs: int = 10,
+    learning_rate: float = 0.0001
+):
     """
     Trigger model retraining with new data.
+    
+    Args:
+        epochs: Number of training epochs (default: 10)
+        learning_rate: Learning rate for training (default: 0.0001)
     
     Returns:
         Retraining status
@@ -229,31 +237,55 @@ async def trigger_retraining(background_tasks: BackgroundTasks):
     global retraining_status
     
     if retraining_status["status"] == "running":
-        raise HTTPException(status_code=409, detail="Retraining already in progress")
+        raise HTTPException(
+            status_code=409, 
+            detail="Retraining already in progress. Check /retrain_status for progress."
+        )
     
     # Check if new data exists
     if not any(NEW_DATA_DIR.iterdir()):
-        raise HTTPException(status_code=400, detail="No new training data found")
+        raise HTTPException(
+            status_code=400, 
+            detail="No new training data found. Upload data using /upload_bulk first."
+        )
+    
+    # Validate parameters
+    if not (1 <= epochs <= 100):
+        raise HTTPException(status_code=400, detail="Epochs must be between 1 and 100")
+    if not (0.00001 <= learning_rate <= 0.1):
+        raise HTTPException(status_code=400, detail="Learning rate must be between 0.00001 and 0.1")
     
     # Start retraining in background
-    background_tasks.add_task(retrain_model)
+    background_tasks.add_task(retrain_model_with_params, epochs=epochs, lr=learning_rate)
     
     retraining_status = {
         "status": "running",
         "message": "Retraining started",
-        "progress": 0
+        "progress": 0,
+        "timestamp": datetime.now().isoformat(),
+        "config": {"epochs": epochs, "learning_rate": learning_rate}
     }
     
-    return {"message": "Retraining started successfully"}
+    logger.info(f"🔄 Retraining started: {epochs} epochs, lr={learning_rate}")
+    
+    return {
+        "status": "started",
+        "message": "Retraining started successfully",
+        "check_status_at": "/retrain_status"
+    }
 
 
 @app.get("/retrain_status")
 async def get_retrain_status():
-    """Get current retraining status."""
-    return retraining_status
+    """Get current retraining status and progress."""
+    return {
+        **retraining_status,
+        "can_retrain": retraining_status["status"] != "running",
+        "new_data_available": any(NEW_DATA_DIR.iterdir()) if NEW_DATA_DIR.exists() else False
+    }
 
 
-async def retrain_model():
+def retrain_model():
     """Background task for model retraining."""
     global predictor, retraining_status
     
@@ -281,6 +313,8 @@ async def retrain_model():
             batch_size=16  # Smaller batch for retraining
         )
         
+        logger.info(f"📊 Training with {len(train_loader.dataset)} samples, {len(class_names)} classes")
+        
         retraining_status.update({
             "message": "Training model...",
             "progress": 50
@@ -299,7 +333,7 @@ async def retrain_model():
         )
         
         retraining_status.update({
-            "message": "Saving model...",
+            "message": "Saving and reloading model...",
             "progress": 90
         })
         
@@ -309,23 +343,104 @@ async def retrain_model():
         retraining_status.update({
             "status": "completed",
             "message": "Retraining completed successfully",
-            "progress": 100
+            "progress": 100,
+            "timestamp": datetime.now().isoformat()
         })
         
         logger.info("✅ Model retraining completed")
         
     except Exception as e:
         logger.error(f"❌ Retraining failed: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         retraining_status.update({
             "status": "failed",
             "message": f"Retraining failed: {str(e)}",
-            "progress": 0
+            "progress": 0,
+            "timestamp": datetime.now().isoformat()
+        })
+
+
+def retrain_model_with_params(epochs: int = 10, lr: float = 0.0001):
+    """Background task for model retraining with parameters."""
+    global predictor, retraining_status
+    
+    try:
+        logger.info(f"🔄 Starting model retraining: {epochs} epochs, lr={lr}...")
+        
+        # Update status
+        retraining_status.update({
+            "status": "running",
+            "message": "Preparing data...",
+            "progress": 10
+        })
+        
+        # Merge new data with existing training data
+        merged_count = merge_training_data()
+        
+        retraining_status.update({
+            "message": f"Loading data (added {merged_count} images)...",
+            "progress": 30
+        })
+        
+        # Create data loaders
+        train_loader, val_loader, class_names = create_data_loaders(
+            train_dir=str(TRAIN_DIR),
+            batch_size=16
+        )
+        
+        logger.info(f"📊 Training with {len(train_loader.dataset)} samples, {len(class_names)} classes")
+        
+        retraining_status.update({
+            "message": f"Training model ({epochs} epochs)...",
+            "progress": 50
+        })
+        
+        # Create and train model
+        model = DentalClassifier(num_classes=len(class_names), pretrained=True)
+        trainer = DentalTrainer(model, class_names=class_names)
+        
+        # Train with specified parameters
+        trainer.train(
+            train_loader=train_loader,
+            val_loader=val_loader,
+            epochs=epochs,
+            lr=lr
+        )
+        
+        retraining_status.update({
+            "message": "Saving and reloading model...",
+            "progress": 90
+        })
+        
+        # Reload predictor with new model
+        predictor = DentalPredictor(MODEL_PATH)
+        
+        retraining_status.update({
+            "status": "completed",
+            "message": "Retraining completed successfully!",
+            "progress": 100,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        logger.info("✅ Model retraining completed successfully")
+        
+    except Exception as e:
+        logger.error(f"❌ Retraining failed: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        retraining_status.update({
+            "status": "failed",
+            "message": f"Retraining failed: {str(e)}",
+            "progress": 0,
+            "timestamp": datetime.now().isoformat()
         })
 
 
 def merge_training_data():
     """Merge new uploaded data with existing training data."""
     logger.info("📂 Merging training data...")
+    merged_count = 0
     
     # Iterate through new data directories
     for upload_dir in NEW_DATA_DIR.iterdir():
@@ -339,15 +454,18 @@ def merge_training_data():
                     # Copy all images
                     for img_file in class_dir.glob('*'):
                         if img_file.suffix.lower() in ['.jpg', '.jpeg', '.png']:
-                            target_file = target_class_dir / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{img_file.name}"
+                            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                            target_file = target_class_dir / f"{timestamp}_{img_file.name}"
                             shutil.copy2(img_file, target_file)
+                            merged_count += 1
     
     # Clean up new data directory after merging
     for upload_dir in NEW_DATA_DIR.iterdir():
         if upload_dir.is_dir():
             shutil.rmtree(upload_dir)
     
-    logger.info("✅ Data merging completed")
+    logger.info(f"✅ Data merging completed: {merged_count} images merged")
+    return merged_count
 
 
 @app.get("/model_info")

@@ -222,80 +222,24 @@ def main():
         )
         
         st.markdown("---")
-        
-        # API Status
-        st.subheader("System Status")
-        if check_api_health():
-            st.success(" API Online")
-        else:
-            st.error(" API Offline")
-        
-        st.markdown("---")
-        st.info("**Model**: ResNet18\n\n**Classes**: 5\n\n**Accuracy**: 93%+")
     
     # Home Page
     if page == " Home":
         st.header("Welcome to the Dental X-Ray Classification System")
         
-        col1, col2, col3 = st.columns(3)
+        st.write("""
+        This application uses advanced machine learning to analyze dental X-ray images 
+        and classify various dental conditions. Upload your X-ray images to get instant 
+        predictions and insights.
         
-        with col1:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.metric("Model Accuracy", "93.2%")
-            st.markdown('</div>', unsafe_allow_html=True)
+        **Key Features:**
+        - Instant X-ray image classification
+        - Multiple dental condition detection
+        - Model retraining capabilities
+        - Data visualization and insights
         
-        with col2:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.metric("Classes", "5")
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        with col3:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.metric("Architecture", "ResNet18")
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        st.markdown("---")
-        
-        st.subheader(" Features")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("""
-            ** Prediction**
-            - Upload dental X-ray images
-            - Get instant classification
-            - View confidence scores
-            - See probability distributions
-            """)
-            
-            st.markdown("""
-            ** Data Insights**
-            - View training data distribution
-            - Analyze class balance
-            - Monitor data quality
-            """)
-        
-        with col2:
-            st.markdown("""
-            ** Retraining**
-            - Upload new training data (ZIP)
-            - Trigger model retraining
-            - Monitor training progress
-            - Automatic model update
-            """)
-            
-            st.markdown("""
-            ** Classification Categories**
-            - Cavity
-            - Fillings
-            - Impacted Tooth
-            - Implant
-            - Normal
-            """)
-        
-        st.markdown("---")
-        st.info(" **Tip**: Start by uploading an X-ray image in the Prediction page!")
+        Navigate through the sidebar to explore different features of the application.
+        """)
     
     # Prediction Page
     elif page == " Prediction":
@@ -341,15 +285,8 @@ def main():
                                 conf_class = "confidence-low"
                             
                             st.markdown(f"### Prediction: **{prediction}**")
-                            st.markdown(f'<p class="{conf_class}">Confidence: {confidence*100:.1f}%</p>', unsafe_allow_html=True)
                             
                             st.markdown('</div>', unsafe_allow_html=True)
-                            
-                            # Confidence gauge
-                            st.plotly_chart(
-                                plot_confidence_gauge(confidence),
-                                use_container_width=True
-                            )
                             
                             # Probability distribution
                             st.subheader("All Class Probabilities")
