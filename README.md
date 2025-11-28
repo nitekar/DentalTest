@@ -361,6 +361,22 @@ curl "http://localhost:8000/health"
 - `api.py` - Production FastAPI server
 - `Procfile` - Startup commands
 
+**IMPORTANT - Model Setup**:
+The model file (`dental_model.pth`) is not included in git due to size. You must host it separately:
+
+1. **Upload model to cloud storage** (choose one):
+   - **Google Drive**: Upload → Share → Get direct download link
+   - **Dropbox**: Upload → Share → Change `?dl=0` to `?dl=1`
+   - **Hugging Face**: Create model repo → Upload file
+   - **GitHub Release**: Create release → Attach model file
+   
+   See `upload_model_guide.md` for detailed instructions.
+
+2. **Set MODEL_URL environment variable in Render**:
+   - After creating the service, go to Dashboard → Environment
+   - Add: `MODEL_URL = https://your-direct-download-url`
+   - Save and redeploy
+
 **Deployment Steps**:
 ```bash
 # 1. Push to GitHub (if not already done)
@@ -374,7 +390,9 @@ git push origin main
 # - Connect your GitHub repo: nitekar/DentalTest
 # - Render will auto-detect render.yaml and deploy
 
-# 3. Access your deployed app
+# 3. Set MODEL_URL environment variable (see above)
+
+# 4. Access your deployed app
 # - API: https://your-app-name.onrender.com
 # - Docs: https://your-app-name.onrender.com/docs
 ```

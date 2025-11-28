@@ -17,6 +17,8 @@ import asyncio
 import json
 from datetime import datetime
 import logging
+import requests
+import os
 
 from src.prediction import DentalPredictor
 from src.model import DentalClassifier, DentalTrainer
@@ -52,9 +54,36 @@ retraining_status = {
 
 # Model paths
 MODEL_PATH = "models/dental_model.pth"
+MODEL_URL = os.getenv("MODEL_URL", "")  # Set this environment variable with your model URL
 DATA_DIR = Path("data")
 TRAIN_DIR = DATA_DIR / "train"
 NEW_DATA_DIR = DATA_DIR / "new"
+
+
+def download_model(url: str, destination: str):
+    """Download model from URL if it doesn't exist."""
+    try:
+        logger.info(f"Downloading model from {url}...")
+        response = requests.get(url, stream=True)
+        response.raise_for_status()
+        
+        total_size = int(response.headers.get('content-length', 0))
+        downloaded = 0
+        
+        with open(destination, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if total_size > 0:
+                        progress = (downloaded / total_size) * 100
+                        logger.info(f"Download progress: {progress:.1f}%")
+        
+        logger.info(f"✅ Model downloaded successfully to {destination}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Failed to download model: {str(e)}")
+        return False
 
 
 @app.on_event("startup")
@@ -67,42 +96,18 @@ async def startup_event():
         Path("models").mkdir(exist_ok=True)
         NEW_DATA_DIR.mkdir(parents=True, exist_ok=True)
         
-        # Load model if exists, otherwise create a dummy predictor
+        # Download model if it doesn't exist and URL is provided
+        if not Path(MODEL_PATH).exists() and MODEL_URL:
+            logger.info("Model not found locally. Attempting to download...")
+            download_model(MODEL_URL, MODEL_PATH)
+        
+        # Load model if exists
         if Path(MODEL_PATH).exists():
             predictor = DentalPredictor(MODEL_PATH)
             logger.info("✅ Model loaded successfully")
         else:
-            logger.warning("⚠️ No trained model found. Creating dummy predictor for demo.")
-            # Create a simple dummy predictor for demo purposes
-            from src.model import DentalClassifier
-            import torch
-            
-            class DummyPredictor:
-                def __init__(self):
-                    self.class_names = ["BDC_BDR", "Caries", "Fractured", "Healthy", "Impacted", "Infection"]
-                    self.device = "cpu"
-                
-                def predict(self, image):
-                    import random
-                    # Return random prediction for demo
-                    pred_class = random.choice(self.class_names)
-                    confidence = random.uniform(0.7, 0.95)
-                    
-                    # Create probability distribution
-                    probs = {name: random.uniform(0.01, 0.1) for name in self.class_names}
-                    probs[pred_class] = confidence
-                    
-                    # Normalize probabilities
-                    total = sum(probs.values())
-                    probs = {k: v/total for k, v in probs.items()}
-                    
-                    return {
-                        "prediction": pred_class,
-                        "confidence": probs[pred_class],
-                        "all_probabilities": probs
-                    }
-            
-            predictor = DummyPredictor()
+            logger.warning("⚠️ No trained model found. Please provide MODEL_URL environment variable or upload a model.")
+            predictor = None
             
     except Exception as e:
         logger.error(f"❌ Startup error: {str(e)}")
