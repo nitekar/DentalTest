@@ -114,7 +114,7 @@ async def predict_image(file: UploadFile = File(...)):
         raise HTTPException(status_code=503, detail="Model not loaded")
     
     # Validate file type
-    if not file.content_type.startswith('image/'):
+    if file.content_type and not file.content_type.startswith('image/'):
         raise HTTPException(status_code=400, detail="File must be an image")
     
     try:
@@ -139,56 +139,80 @@ async def predict_image(file: UploadFile = File(...)):
 
 
 @app.post("/upload_bulk")
-async def upload_bulk_data(file: UploadFile = File(...)):
+async def upload_bulk_data(file: UploadFile = File(...), class_name: str = "Unknown"):
     """
-    Upload bulk training data as ZIP file.
+    Upload training data - supports both ZIP files and individual images.
     
-    Expected ZIP structure:
-    - class_name1/
-      - image1.jpg
-      - image2.jpg
-    - class_name2/
-      - image3.jpg
+    For ZIP files:
+    - Expected structure: class_name1/image1.jpg, class_name2/image2.jpg
+    
+    For individual images:
+    - Provide class_name parameter to specify the class
+    - Image will be saved to: data/new/upload_timestamp/class_name/
     
     Args:
-        file: ZIP file with training data
+        file: ZIP file or image file (JPG, PNG, JPEG)
+        class_name: Class name for individual images (ignored for ZIP files)
         
     Returns:
         Upload status and extraction details
     """
-    if not file.filename.endswith('.zip'):
-        raise HTTPException(status_code=400, detail="File must be a ZIP archive")
-    
     try:
-        # Read ZIP file
+        # Read file contents
         contents = await file.read()
         
-        # Extract to new data directory
-        extraction_path = NEW_DATA_DIR / f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        extraction_path.mkdir(parents=True, exist_ok=True)
+        # Create upload directory
+        upload_dir = NEW_DATA_DIR / f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        upload_dir.mkdir(parents=True, exist_ok=True)
         
-        with zipfile.ZipFile(io.BytesIO(contents), 'r') as zip_ref:
-            zip_ref.extractall(extraction_path)
-        
-        # Count extracted files
         total_files = 0
         class_counts = {}
         
-        for class_dir in extraction_path.iterdir():
-            if class_dir.is_dir():
-                files = list(class_dir.glob('*.jpg')) + list(class_dir.glob('*.png'))
-                class_counts[class_dir.name] = len(files)
-                total_files += len(files)
-        
-        logger.info(f"Extracted {total_files} images to {extraction_path}")
+        # Check if it's a ZIP file
+        if file.filename.endswith('.zip'):
+            # Handle ZIP file
+            with zipfile.ZipFile(io.BytesIO(contents), 'r') as zip_ref:
+                zip_ref.extractall(upload_dir)
+            
+            # Count extracted files
+            for class_dir in upload_dir.iterdir():
+                if class_dir.is_dir():
+                    files = list(class_dir.glob('*.jpg')) + list(class_dir.glob('*.jpeg')) + list(class_dir.glob('*.png'))
+                    class_counts[class_dir.name] = len(files)
+                    total_files += len(files)
+            
+            logger.info(f"Extracted {total_files} images from ZIP to {upload_dir}")
+            
+        elif file.filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+            # Handle individual image
+            class_dir = upload_dir / class_name
+            class_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Save image
+            image_path = class_dir / file.filename
+            with open(image_path, 'wb') as f:
+                f.write(contents)
+            
+            total_files = 1
+            class_counts[class_name] = 1
+            
+            logger.info(f"Saved image to {image_path}")
+        else:
+            raise HTTPException(
+                status_code=400, 
+                detail="File must be a ZIP archive or image file (JPG, PNG)"
+            )
         
         return {
-            "message": f"Successfully uploaded {total_files} images",
-            "extraction_path": str(extraction_path),
+            "message": f"Successfully uploaded {total_files} image(s)",
+            "extraction_path": str(upload_dir.name),
             "class_counts": class_counts,
-            "total_files": total_files
+            "total_files": total_files,
+            "file_type": "zip" if file.filename.endswith('.zip') else "image"
         }
         
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=400, detail="Invalid ZIP file")
     except Exception as e:
         logger.error(f"Upload error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")

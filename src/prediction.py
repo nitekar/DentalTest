@@ -30,33 +30,36 @@ class DentalPredictor:
         else:
             self.device = device
         
-        # Class names
-        self.class_names = ['Cavity', 'Fillings', 'Impacted', 'Implant', 'Normal']
+        # Load checkpoint first to get class info
+        checkpoint = torch.load(self.model_path, map_location=self.device)
+        
+        # Get class names from checkpoint
+        if 'class_names' in checkpoint:
+            self.class_names = checkpoint['class_names']
+        else:
+            # Fallback to default
+            self.class_names = ['Cavity', 'Fillings', 'Impacted', 'Implant', 'Normal', 'Other']
         
         # Initialize preprocessor
         self.preprocessor = DentalPreprocessor(image_size=224, apply_clahe=True)
         
         # Load model
-        self.model = self._load_model()
+        self.model = self._load_model(checkpoint)
         self.model.eval()
         
-        print(f" Model loaded successfully on {self.device}")
+        print(f"✅ Model loaded successfully on {self.device}")
+        print(f"📊 Classes: {self.class_names}")
     
-    def _load_model(self):
+    def _load_model(self, checkpoint):
         """Load trained model from checkpoint."""
-        # Initialize model architecture
+        # Initialize model architecture with correct number of classes
         model = DentalClassifier(num_classes=len(self.class_names), pretrained=False)
         
-        # Load checkpoint
-        checkpoint = torch.load(self.model_path, map_location=self.device)
+        # Load state dict
         model.load_state_dict(checkpoint['model_state_dict'])
         
         # Move to device
         model = model.to(self.device)
-        
-        # Update class names from checkpoint if available
-        if 'class_names' in checkpoint:
-            self.class_names = checkpoint['class_names']
         
         return model
     
