@@ -350,6 +350,20 @@ async def get_retrain_status():
     }
 
 
+@app.post("/reset_retrain")
+async def reset_retrain_status():
+    """Reset retraining status to idle."""
+    global retraining_status
+    
+    retraining_status.update({
+        "status": "idle",
+        "message": "Status reset",
+        "progress": 0
+    })
+    
+    return {"message": "Retraining status reset to idle"}
+
+
 def retrain_model():
     """Background task for model retraining."""
     global predictor, retraining_status

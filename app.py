@@ -24,7 +24,7 @@ st.set_page_config(
 )
 
 # API endpoint
-API_URL = "https://dentaltest-1.onrender.com"
+API_URL = "http://localhost:8000"
 
 
 # Custom CSS
@@ -381,6 +381,8 @@ def main():
                             # Automatically trigger retraining
                             with st.spinner("Starting retraining..."):
                                 try:
+                                    # First reset status, then start retraining
+                                    requests.post(f"{API_URL}/reset_retrain", timeout=10)
                                     retrain_response = requests.post(f"{API_URL}/retrain", json={"force": True}, timeout=60)
                                     retrain_response.raise_for_status()
                                     retrain_result = retrain_response.json()
